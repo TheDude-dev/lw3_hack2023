@@ -143,6 +143,7 @@ let endOfTheMap = platformImage.width*5+1000
 let start
 let finalScore = null;
 let gameEnded = false;
+let sendData = false;
 
 let player = new Player()
 let platforms = []
@@ -171,7 +172,7 @@ function calculateScore(start, end=new Date().getTime()) {
 function gameOver() {
     gameEnded = true;  // Set the game state to ended
 
-    let gameOverText = 'Game over!';
+    let gameOverText = 'You won!';
     let finalScoreText = 'Final score: ' + finalScore;
 
     c.fillStyle = 'blue';
@@ -189,6 +190,7 @@ function showScore(){
 function init(){
     start = new Date().getTime(); 
     gameEnded = false;
+    sendData = false;
 
     player = new Player()
     platforms = [
@@ -313,6 +315,17 @@ function animate(){
     if (scrollOffset > endOfTheMap-400){
         gameOver()
         console.log('You win')
+
+        if (!sendData && gameEnded){
+            postData({
+                username: username,
+                score: finalScore,
+                wallet: wallet,
+                datetime: new Date().getTime()
+            });
+            sendData = true;
+        }
+
         sleep(2000).then(() => { init(); });
     }
 
@@ -394,3 +407,24 @@ window.addEventListener('keyup', ({ keyCode }) => {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+async function postData(data) {
+    const url = "http://localhost:3007/streamr/publish/0x4be4f472ff58b8aaa999253cfd2474a8b6cae160%2Flw3_game"; 
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            body: JSON.stringify(data),
+            headers: {
+                "Content-type": "application/json; charset=UTF-8"
+            }
+        });
+
+        const json = await response.json();
+        console.log(json);
+        return json;
+    } catch (error) {
+        console.error("Error posting data:", error);
+        throw error;
+    }
+}

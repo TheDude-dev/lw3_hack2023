@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors'
 import StreamrClient from "streamr-client";
 import { startSubscribing } from './streamr.js';// Import the Streamr client
 import { config } from 'dotenv';
@@ -15,8 +16,21 @@ const streamr = new StreamrClient({
     },
 })
 
-
+app.use((req, res, next) =>
+  {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content, Accept, Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    next();
+  });
+  
 app.use(express.json())
+app.use(
+    cors({
+      origin: ["http://localhost:3001"],
+      methods: ["GET", "POST", "PUT", "DELETE"],
+    })
+  );
 
 app.get('/', (req, res) => {
     res.send('Wecolme to our Stream. Subscribe or public, do what you want...');
