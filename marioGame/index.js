@@ -12,6 +12,9 @@ const spriteStandRight = './assets/spriteStandRight.png'
 const canvas = document.querySelector('canvas')
 const c = canvas.getContext('2d')
 
+//launch a subscriber if needed
+//https://lw3-streamr.onrender.com/streamr/start-subscribing/0x4be4f472ff58b8aaa999253cfd2474a8b6cae160%2Flw3_game
+
 // http://127.0.0.1:3001/index.html?username=Jean&wallet=0x25D...z4DD
 const urlParams = new URL(document.URL).searchParams;
 let username = urlParams.get('username');
@@ -409,7 +412,8 @@ function sleep(ms) {
   }
 
 async function postData(data) {
-    const url = "http://localhost:3007/streamr/publish/0x4be4f472ff58b8aaa999253cfd2474a8b6cae160%2Flw3_game"; 
+    //const url = "http://localhost:3007/streamr/publish/0x4be4f472ff58b8aaa999253cfd2474a8b6cae160%2Flw3_game"; 
+    const url = "https://lw3-streamr.onrender.com/streamr/publish/0x4be4f472ff58b8aaa999253cfd2474a8b6cae160%2Flw3_game"
 
     try {
         const response = await fetch(url, {
@@ -428,3 +432,4 @@ async function postData(data) {
         throw error;
     }
 }
+

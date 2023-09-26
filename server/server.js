@@ -23,7 +23,7 @@ app.use((req, res, next) =>
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     next();
   });
-  
+
 app.use(express.json())
 app.use(
     cors({
@@ -86,12 +86,12 @@ app.get('/streamr/start-subscribing/:id', (req, res) => {
     if (d)
         res.send('Started subscribing to Streamr:' + d);
     else
-        res.send('Started subscribing to defaut Streamr.');
+        res.send({msg: 'Started subscribing to defaut Streamr.'});
 });
 
 app.get('/streamr/start-subscribing/binance', (req, res) => {
     startSubscribing(streamr, 'binance-streamr.eth/BTCUSDT/ticker');
-    res.send('Started subscribing to Binance Streamr.');
+    res.send({msg: 'Started subscribing to Binance Streamr.'});
 });
 
 
