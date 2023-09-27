@@ -28,6 +28,7 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /* State variable */
     Background[] public s_backgrounds;
+    address[] public s_players;
     VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
     bytes32 private immutable i_gasLane;
     uint64 private immutable i_subscriptionId;
@@ -42,11 +43,13 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
     BackgroundFactoryState private s_backgroundFactoryState;
     uint256 private s_lastTimeStamp;
     uint256 private immutable i_interval;
+    address private s_playerAddress;
 
     /* Events */
-    event NewBackground(uint256 backgroundId, string name, uint256 dna);
+    event NewBackground(uint256 indexed backgroundId, string indexed name, uint256 indexed dna);
     event RequestedRandomDna(uint256 indexed requestId);
     event DnaPicked(uint256 indexed dnapicked);
+    event GameEnter(address indexed player);
 
     constructor(
         address vrfCoordinatorV2,
@@ -66,6 +69,10 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /* functions */
     // private function to create our background and emit an event
+    function enterGame(address _s_playerAddress) public {
+        s_players.push(_s_playerAddress);
+        emit GameEnter(_s_playerAddress);
+    }
 
     function createRandomBackground(string memory _name) public {
         if (s_backgroundFactoryState != BackgroundFactoryState.OPEN) {
