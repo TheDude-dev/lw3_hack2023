@@ -13,13 +13,21 @@ import "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.s
  */
 
 error BackgroundFactory__NotOpen();
-error BackgroundFactory__UpkeepNotNeeded(uint256 backgroundFactoryState);
+error BackgroundFactory__UpkeepNotNeeded(
+    uint256 currentBalance,
+    uint256 numPlayers,
+    uint256 backgroundFactoryState
+);
+error BackgroundFactory__TransferFailed();
+error BackgroundFactory__GameStillOPen();
+error BackgroundFactory__NotOWner();
 
 contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
     /* Types */
     enum BackgroundFactoryState {
         OPEN,
-        CREATING
+        CREATING,
+        CLOSED
     }
     struct Background {
         string name;
@@ -28,7 +36,7 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /* State variable */
     Background[] public s_backgrounds;
-    address[] public s_players;
+    address payable[] private s_players;
     VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
     bytes32 private immutable i_gasLane;
     uint64 private immutable i_subscriptionId;
@@ -44,12 +52,23 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
     uint256 private s_lastTimeStamp;
     uint256 private immutable i_interval;
     address private s_playerAddress;
+    address private immutable i_owner;
 
     /* Events */
     event NewBackground(uint256 indexed backgroundId, string indexed name, uint256 indexed dna);
     event RequestedRandomDna(uint256 indexed requestId);
     event DnaPicked(uint256 indexed dnapicked);
     event GameEnter(address indexed player);
+
+    /* Modifiers */
+    modifier onlyOwner() {
+        if (msg.sender != i_owner) {
+            revert BackgroundFactory__NotOWner();
+        }
+        _;
+    }
+
+    /* functions */
 
     constructor(
         address vrfCoordinatorV2,
@@ -58,6 +77,7 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         uint32 callbackGasLimit,
         uint256 interval
     ) VRFConsumerBaseV2(vrfCoordinatorV2) {
+        i_owner = msg.sender;
         i_vrfCoordinator = VRFCoordinatorV2Interface(vrfCoordinatorV2);
         i_gasLane = gasLane;
         i_subscriptionId = subscriptionId;
@@ -67,11 +87,31 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         i_interval = interval;
     }
 
-    /* functions */
+    // The contract will need to have a balance
+    receive() external payable {}
+
+    fallback() external payable {}
+
+    /* Main functions */
+
     // private function to create our background and emit an event
     function enterGame(address _s_playerAddress) public {
-        s_players.push(_s_playerAddress);
+        if (s_backgroundFactoryState != BackgroundFactoryState.OPEN) {
+            revert BackgroundFactory__NotOpen();
+        }
+        s_players.push(payable(_s_playerAddress));
         emit GameEnter(_s_playerAddress);
+    }
+
+    function payGamer(address _s_playerAddress) public payable onlyOwner {
+        // only after the game is closed
+        if (s_backgroundFactoryState != BackgroundFactoryState.CLOSED) {
+            revert BackgroundFactory__GameStillOPen();
+        }
+        (bool success, ) = _s_playerAddress.call{value: address(this).balance}("");
+        if (!success) {
+            revert BackgroundFactory__TransferFailed();
+        }
     }
 
     function createRandomBackground(string memory _name) public {
@@ -92,6 +132,7 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
      * they look for the `upkeepNeeded` to return true.
      * The following should be true in order to return true:
      * 1. Our time interval should have passed
+     * 2. has at least one player and the balance is not zero
      * 2. Our subscription is funded with LINK
      * 3. The Factory should be in an "open" state.
      */
@@ -102,13 +143,19 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         bool isOpen = (BackgroundFactoryState.OPEN == s_backgroundFactoryState);
         // (block.timeStamp - last block timeStamp) > interval
         bool timePassed = (block.timestamp - s_lastTimeStamp > i_interval);
-        upkeepNeeded = (isOpen && timePassed);
+        bool hasPlayers = (s_players.length > 0);
+        bool hasBalance = address(this).balance > 0;
+        upkeepNeeded = (isOpen && timePassed && hasPlayers && hasBalance);
     }
 
     function performUpkeep(bytes calldata /* performData */) external override {
         (bool upkeepNeeded, ) = checkUpkeep("");
         if (!upkeepNeeded) {
-            revert BackgroundFactory__UpkeepNotNeeded(uint256(s_backgroundFactoryState));
+            revert BackgroundFactory__UpkeepNotNeeded(
+                address(this).balance,
+                s_players.length,
+                uint256(s_backgroundFactoryState)
+            );
         }
         // request the random number
         //Once we get it, do smth with it
@@ -133,11 +180,21 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         s_backgroundFactoryState = BackgroundFactoryState.OPEN;
         //reset our array of struct
         delete s_backgrounds;
+        s_players = new address payable[](0);
         s_lastTimeStamp = block.timestamp;
         emit DnaPicked(s_recentRandomDna);
     }
 
     /* View / Pure functions */
+
+    function getOwner() public view returns (address) {
+        return i_owner;
+    }
+
+    function getPlayers(uint256 index) public view returns (address) {
+        return s_players[index];
+    }
+
     function getRecentRandomBackground() public view returns (uint256) {
         return s_recentRandomDna;
     }

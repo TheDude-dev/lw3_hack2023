@@ -304,8 +304,8 @@
       "artifacts": []
     },
     "/Users/bonheurbaleks/Documents/hackathon/lw3_hack2023/hardhat-web3-hackathon-randomBg/contracts/test/BackgroundFactory.sol": {
-      "lastModificationDate": 1695802865731,
-      "contentHash": "047e249f7c2521ffa9e3355d133dad8e",
+      "lastModificationDate": 1695818941513,
+      "contentHash": "a3f21bc52f0b86f955b88a7626310fac",
       "sourceName": "contracts/test/BackgroundFactory.sol",
       "solcConfig": {
         "version": "0.8.7",
