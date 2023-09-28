@@ -19,15 +19,13 @@ error BackgroundFactory__UpkeepNotNeeded(
     uint256 backgroundFactoryState
 );
 error BackgroundFactory__TransferFailed();
-error BackgroundFactory__GameStillOPen();
 error BackgroundFactory__NotOWner();
 
 contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
     /* Types */
     enum BackgroundFactoryState {
         OPEN,
-        CREATING,
-        CLOSED
+        CREATING
     }
     struct Background {
         string name;
@@ -53,11 +51,12 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
     uint256 private immutable i_interval;
     address private s_playerAddress;
     address private immutable i_owner;
+    address private s_recentWinner;
 
     /* Events */
     event NewBackground(uint256 indexed backgroundId, string indexed name, uint256 indexed dna);
-    event RequestedRandomDna(uint256 indexed requestId);
-    event DnaPicked(uint256 indexed dnapicked);
+    event RequestedRandomWord(uint256 indexed requestId);
+    event WinnerPicked(address indexed winnerpicked);
     event GameEnter(address indexed player);
 
     /* Modifiers */
@@ -99,32 +98,39 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         if (s_backgroundFactoryState != BackgroundFactoryState.OPEN) {
             revert BackgroundFactory__NotOpen();
         }
+        if (s_players.length >= 3) {
+            revert BackgroundFactory__NotOpen();
+        }
         s_players.push(payable(_s_playerAddress));
         emit GameEnter(_s_playerAddress);
     }
 
-    function payGamer(address _s_playerAddress) public payable onlyOwner {
-        // only after the game is closed
-        if (s_backgroundFactoryState != BackgroundFactoryState.CLOSED) {
-            revert BackgroundFactory__GameStillOPen();
-        }
-        (bool success, ) = _s_playerAddress.call{value: address(this).balance}("");
+    function payGamer(address _s_recentWinner) public payable onlyOwner {
+        (bool success, ) = _s_recentWinner.call{value: msg.value}("");
         if (!success) {
             revert BackgroundFactory__TransferFailed();
         }
-    }
-
-    function createRandomBackground(string memory _name) public {
-        if (s_backgroundFactoryState != BackgroundFactoryState.OPEN) {
-            revert BackgroundFactory__NotOpen();
-        }
-        _createBackground(_name, s_recentRandomDna);
     }
 
     function _createBackground(string memory _name, uint256 _dna) private {
         s_backgrounds.push(Background(_name, _dna));
         uint256 id = s_backgrounds.length - 1;
         emit NewBackground(id, _name, _dna);
+    }
+
+    // Generates randomness for our background
+    function _generateRandomBackground(string memory _str) private pure returns (uint256) {
+        // Using keccak256 (not so safe but we don't really have to worry about someone trying to hack our game right 🧐?)
+        uint256 rand = uint256(keccak256(abi.encodePacked(_str)));
+        return rand % DNAMODULUS;
+    }
+
+    function createRandomBackground(string memory _name) public {
+        if (s_backgroundFactoryState != BackgroundFactoryState.OPEN) {
+            revert BackgroundFactory__NotOpen();
+        }
+        uint256 randDna = _generateRandomBackground(_name);
+        _createBackground(_name, randDna);
     }
 
     /**
@@ -143,7 +149,7 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         bool isOpen = (BackgroundFactoryState.OPEN == s_backgroundFactoryState);
         // (block.timeStamp - last block timeStamp) > interval
         bool timePassed = (block.timestamp - s_lastTimeStamp > i_interval);
-        bool hasPlayers = (s_players.length > 0);
+        bool hasPlayers = (s_players.length >= 3);
         bool hasBalance = address(this).balance > 0;
         upkeepNeeded = (isOpen && timePassed && hasPlayers && hasBalance);
     }
@@ -168,21 +174,20 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
             i_callbackGasLimit,
             NUM_WORDS
         );
-        emit RequestedRandomDna(requestId);
+        emit RequestedRandomWord(requestId);
     }
 
     function fulfillRandomWords(
         uint256 /* requestId */,
         uint256[] memory randomWords
     ) internal override {
-        uint256 indexOfRandomDna = randomWords[0] % DNAMODULUS;
-        s_recentRandomDna = indexOfRandomDna;
+        uint256 indexedOfWinner = randomWords[0] % s_players.length;
+        address payable recentWinner = s_players[indexedOfWinner];
+        s_recentWinner = recentWinner;
         s_backgroundFactoryState = BackgroundFactoryState.OPEN;
-        //reset our array of struct
-        delete s_backgrounds;
         s_players = new address payable[](0);
         s_lastTimeStamp = block.timestamp;
-        emit DnaPicked(s_recentRandomDna);
+        emit WinnerPicked(recentWinner);
     }
 
     /* View / Pure functions */
@@ -195,8 +200,8 @@ contract BackgroundFactory is VRFConsumerBaseV2, AutomationCompatibleInterface {
         return s_players[index];
     }
 
-    function getRecentRandomBackground() public view returns (uint256) {
-        return s_recentRandomDna;
+    function getRecentWinner() public view returns (address) {
+        return s_recentWinner;
     }
 
     function getBackgroundFactoryState() public view returns (BackgroundFactoryState) {
